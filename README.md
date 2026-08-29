@@ -11,7 +11,7 @@ Eine eigenständige, animierte KI-Assistentin für Browser und Android. Sie hör
 - `android/` – natives Android-Projekt; lädt dieselbe Einzeldatei in einer abgesicherten App-Oberfläche
 - `app/` – installierbare Web-App/Website mit der React-Oberfläche
 
-Der jeweils aktuelle HTML- und Debug-APK-Build erscheint im GitHub-Prerelease `dev-latest`.
+Die geprüften Dateien liegen direkt unter `dist/`. Ein manuell gestarteter Main-Workflow aktualisiert zusätzlich das GitHub-Prerelease `dev-latest`.
 
 ## Unterstützte Anbieter
 
