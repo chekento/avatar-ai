@@ -1,5 +1,7 @@
 # Avatar AI
 
+[![Build HTML and Android APK](https://github.com/chekento/avatar-ai/actions/workflows/build-release.yml/badge.svg)](https://github.com/chekento/avatar-ai/actions/workflows/build-release.yml)
+
 Eine eigenständige, animierte KI-Assistentin für Browser und Android. Sie hört zu, antwortet per Stimme und animiert Blick, Blinzeln, Mimik sowie 15 mundbasierte Viseme synchron zur Ausgabe.
 
 ## Varianten
