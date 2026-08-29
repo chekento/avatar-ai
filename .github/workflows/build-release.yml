@@ -1,0 +1,61 @@
+name: Build HTML and Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Test web app and create standalone HTML
+        run: |
+          npm ci
+          npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+      - name: Build debug APK
+        run: gradle -p android --no-daemon :app:assembleDebug
+      - name: Collect files and checksums
+        run: |
+          mkdir -p release
+          cp dist/AvatarAI.html release/AvatarAI.html
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/AvatarAI-debug.apk
+          cd release
+          sha256sum AvatarAI.html AvatarAI-debug.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avatar-ai
+          path: release/
+          if-no-files-found: error
+      - name: Update rolling prerelease
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f dev-latest "$GITHUB_SHA"
+          git push origin refs/tags/dev-latest --force
+          if gh release view dev-latest >/dev/null 2>&1; then
+            gh release upload dev-latest release/* --clobber
+            gh release edit dev-latest --title "Avatar AI – aktueller Build" --prerelease --notes "Automatisch geprüfter HTML- und Android-Debug-Build aus main."
+          else
+            gh release create dev-latest release/* --title "Avatar AI – aktueller Build" --prerelease --notes "Automatisch geprüfter HTML- und Android-Debug-Build aus main."
+          fi
