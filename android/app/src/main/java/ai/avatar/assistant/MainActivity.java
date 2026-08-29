@@ -79,7 +79,8 @@ public final class MainActivity extends Activity implements TextToSpeech.OnInitL
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         if (android.os.Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        boolean debuggable = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(debuggable);
         webView.setBackgroundColor(Color.rgb(7, 16, 29));
         webView.addJavascriptInterface(new AvatarBridge(), "AvatarAndroid");
         webView.setWebViewClient(new WebViewClient() {
