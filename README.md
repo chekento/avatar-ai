@@ -6,7 +6,8 @@ Eine eigenständige, animierte KI-Assistentin für Browser und Android. Sie hör
 
 ## Varianten
 
-- `dist/AvatarAI.html` – portable Einzeldatei mit eingebettetem Avatar
+- [`dist/AvatarAI.html`](dist/AvatarAI.html) – portable Einzeldatei mit eingebettetem Avatar
+- [`dist/AvatarAI-debug.apk`](dist/AvatarAI-debug.apk) – installierbare, CI-geprüfte Android-Debug-APK
 - `android/` – natives Android-Projekt; lädt dieselbe Einzeldatei in einer abgesicherten App-Oberfläche
 - `app/` – installierbare Web-App/Website mit der React-Oberfläche
 
@@ -68,7 +69,7 @@ npm run build:standalone
 gradle -p android :app:assembleDebug
 ```
 
-Die APK liegt danach unter `android/app/build/outputs/apk/debug/app-debug.apk`. Der GitHub-Workflow führt denselben Build automatisch aus.
+Die APK liegt danach unter `android/app/build/outputs/apk/debug/app-debug.apk`. Der GitHub-Workflow führt denselben Build automatisch aus und veröffentlicht die geprüfte Kopie als `dist/AvatarAI-debug.apk`.
 
 ## Datenschutz und Grenzen
 

@@ -37,6 +37,8 @@ yarn-error.log*
 next-env.d.ts
 /dist/*
 !/dist/AvatarAI.html
+!/dist/AvatarAI-debug.apk
+!/dist/SHA256SUMS.txt
 /.wrangler/
 /.sites-runtime/
 /outputs/
