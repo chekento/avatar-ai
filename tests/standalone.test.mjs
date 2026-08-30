@@ -13,6 +13,7 @@ test("standalone build is self-contained and exposes all providers", async () =>
   assert.match(html, /v-ou/)
   assert.match(html, /provider="gemini"/)
   assert.match(html, /showOAuth\("gemini"\)/)
+  assert.match(html, /authorizeGoogle/)
   assert.doesNotMatch(html, /class="(?:pupil|lid|brow)/)
   const scripts = [...html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1]).filter(Boolean)
   assert.equal(scripts.length, 1)

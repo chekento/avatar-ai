@@ -3,6 +3,7 @@ package ai.avatar.assistant;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.IntentSender;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -45,9 +46,19 @@ import javax.crypto.spec.GCMParameterSpec;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 
+import com.google.android.gms.auth.api.identity.AuthorizationRequest;
+import com.google.android.gms.auth.api.identity.AuthorizationResult;
+import com.google.android.gms.auth.api.identity.ClearTokenRequest;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Scope;
+
+import java.util.Collections;
+
 public final class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private static final String APP_ORIGIN = "https://app.avatar.local/";
     private static final int RECORD_AUDIO_REQUEST = 41;
+    private static final int GOOGLE_AUTH_REQUEST = 42;
     private static final String KEY_ALIAS = "avatar-ai-session-secrets";
     private static final String PREFS = "avatar-ai-encrypted";
 
@@ -58,6 +69,64 @@ public final class MainActivity extends Activity implements TextToSpeech.OnInitL
     private String pendingSpeech;
     private String pendingSpeechLanguage = "de-DE";
     private String pendingRecognitionLanguage;
+
+    private void deliverGoogleToken(AuthorizationResult result) {
+        String accessToken = result.getAccessToken();
+        if (accessToken == null || accessToken.isEmpty()) {
+            callback("onGoogleOAuthError", "Google hat kein Zugriffstoken geliefert.");
+            return;
+        }
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript(
+                "window.avatarNative&&window.avatarNative.onGoogleToken(" + JSONObject.quote(accessToken) + ",3600)",
+                null));
+    }
+
+    private void authorizeGoogle() {
+        AuthorizationRequest request = AuthorizationRequest.builder()
+                .setRequestedScopes(Collections.singletonList(
+                        new Scope("https://www.googleapis.com/auth/cloud-platform")))
+                .build();
+        Identity.getAuthorizationClient(this)
+                .authorize(request)
+                .addOnSuccessListener(result -> {
+                    if (result.hasResolution() && result.getPendingIntent() != null) {
+                        try {
+                            startIntentSenderForResult(
+                                    result.getPendingIntent().getIntentSender(),
+                                    GOOGLE_AUTH_REQUEST,
+                                    null,
+                                    0,
+                                    0,
+                                    0);
+                        } catch (IntentSender.SendIntentException exception) {
+                            callback("onGoogleOAuthError", "Google-Anmeldung konnte nicht geöffnet werden.");
+                        }
+                    } else {
+                        deliverGoogleToken(result);
+                    }
+                })
+                .addOnFailureListener(error -> callback(
+                        "onGoogleOAuthError",
+                        "Google-Autorisierung fehlgeschlagen: " + error.getLocalizedMessage()));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != GOOGLE_AUTH_REQUEST) return;
+        if (resultCode != RESULT_OK || data == null) {
+            callback("onGoogleOAuthError", "Google-Anmeldung wurde abgebrochen.");
+            return;
+        }
+        try {
+            AuthorizationResult result = Identity.getAuthorizationClient(this)
+                    .getAuthorizationResultFromIntent(data);
+            deliverGoogleToken(result);
+        } catch (ApiException exception) {
+            callback("onGoogleOAuthError", "Google-Anmeldung wurde abgebrochen oder ist fehlgeschlagen.");
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -277,6 +346,12 @@ public final class MainActivity extends Activity implements TextToSpeech.OnInitL
         @JavascriptInterface public void stopListening() { runOnUiThread(MainActivity.this::stopRecognition); }
         @JavascriptInterface public void speak(String text, String language) { runOnUiThread(() -> speakNative(text, language)); }
         @JavascriptInterface public void stopSpeaking() { runOnUiThread(() -> { if (textToSpeech != null) textToSpeech.stop(); callbackNoArg("onSpeechDone"); }); }
+        @JavascriptInterface public void authorizeGoogle() { runOnUiThread(MainActivity.this::authorizeGoogle); }
+        @JavascriptInterface public void clearGoogleToken(String token) {
+            if (token == null || token.isEmpty()) return;
+            ClearTokenRequest request = ClearTokenRequest.builder().setToken(token).build();
+            Identity.getAuthorizationClient(MainActivity.this).clearToken(request);
+        }
         @JavascriptInterface public void secureSet(String key, String value) { try { putSecret(key, value); } catch (Exception ignored) {} }
         @JavascriptInterface public String secureGet(String key) { try { return readSecret(key); } catch (Exception ignored) { return null; } }
         @JavascriptInterface public void secureDelete(String key) { getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).apply(); }

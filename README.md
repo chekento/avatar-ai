@@ -58,7 +58,7 @@ Für die APK eine öffentliche Client-ID ohne Secret anlegen, den Scope `inferen
 3. Für die Website eine Web-Client-ID erstellen und die Web-Adresse als autorisierten JavaScript-Ursprung eintragen.
 4. Beim Start von Avatar AI Google Client-ID und Cloud-Projekt-ID eintragen und die OAuth-Anmeldung bestätigen.
 
-Die APK verwendet Authorization Code + PKCE und `avatarai://oauth/gemini`. Dieser Redirect muss zum gewählten öffentlichen/native OAuth-Client passen. Client-IDs und Projekt-IDs sind Konfiguration, keine Geheimnisse.
+Die APK verwendet Googles nativen `AuthorizationClient`. Im Cloud-Projekt muss dafür ein Android-OAuth-Client für das Paket `ai.avatar.assistant` und den SHA-1-Fingerabdruck der signierten APK angelegt sein. Eine Web-Client-ID oder eigene Google-Redirect-URI ist in der APK nicht nötig. Client-IDs und Projekt-IDs sind Konfiguration, keine Geheimnisse.
 
 ## Android bauen
 
