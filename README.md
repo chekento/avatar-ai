@@ -2,7 +2,7 @@
 
 [![Build HTML and Android APK](https://github.com/chekento/avatar-ai/actions/workflows/build-release.yml/badge.svg)](https://github.com/chekento/avatar-ai/actions/workflows/build-release.yml)
 
-Eine eigenständige, animierte KI-Assistentin für Browser und Android. Sie hört zu, antwortet per Stimme und animiert Blick, Blinzeln, Mimik sowie 15 mundbasierte Viseme synchron zur Ausgabe.
+Eine eigenständige, animierte KI-Assistentin für Browser und Android. Sie hört zu, antwortet per Stimme und verbindet Blickreaktion, Atmung, Gestik, Stimmungsbewegungen sowie 15 mundbasierte Viseme synchron mit der Ausgabe. Das Gesicht nutzt keine künstlichen Augen-Overlays.
 
 ## Varianten
 
@@ -56,7 +56,7 @@ Für die APK eine öffentliche Client-ID ohne Secret anlegen, den Scope `inferen
 1. In einem Google-Cloud-Projekt die Generative Language API aktivieren.
 2. OAuth-Zustimmungsbildschirm konfigurieren.
 3. Für die Website eine Web-Client-ID erstellen und die Web-Adresse als autorisierten JavaScript-Ursprung eintragen.
-4. Google Client-ID und Cloud-Projekt-ID in Avatar AI unter „Einstellungen“ eintragen.
+4. Beim Start von Avatar AI Google Client-ID und Cloud-Projekt-ID eintragen und die OAuth-Anmeldung bestätigen.
 
 Die APK verwendet Authorization Code + PKCE und `avatarai://oauth/gemini`. Dieser Redirect muss zum gewählten öffentlichen/native OAuth-Client passen. Client-IDs und Projekt-IDs sind Konfiguration, keine Geheimnisse.
 

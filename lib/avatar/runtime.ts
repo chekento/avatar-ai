@@ -82,6 +82,7 @@ export const DEFAULT_SETTINGS: ProviderSettings = {
 }
 
 const TOKEN_PREFIX = "avatar-ai:token:"
+const TOKEN_EXPIRY_PREFIX = "avatar-ai:token-expiry:"
 const OAUTH_PREFIX = "avatar-ai:oauth:"
 const SETTINGS_KEY = "avatar-ai:settings"
 
@@ -103,15 +104,29 @@ export function saveSettings(settings: ProviderSettings) {
 
 export function getToken(provider: ProviderId): string | null {
   if (typeof window === "undefined") return null
+  const expiry = Number(window.sessionStorage.getItem(`${TOKEN_EXPIRY_PREFIX}${provider}`) || 0)
+  if (expiry && Date.now() >= expiry) {
+    clearToken(provider)
+    return null
+  }
   return window.sessionStorage.getItem(`${TOKEN_PREFIX}${provider}`)
 }
 
-export function setToken(provider: ProviderId, token: string) {
+export function setToken(provider: ProviderId, token: string, expiresInSeconds?: number) {
   window.sessionStorage.setItem(`${TOKEN_PREFIX}${provider}`, token)
+  if (expiresInSeconds && Number.isFinite(expiresInSeconds)) {
+    window.sessionStorage.setItem(
+      `${TOKEN_EXPIRY_PREFIX}${provider}`,
+      String(Date.now() + Math.max(30, expiresInSeconds - 45) * 1000),
+    )
+  } else {
+    window.sessionStorage.removeItem(`${TOKEN_EXPIRY_PREFIX}${provider}`)
+  }
 }
 
 export function clearToken(provider: ProviderId) {
   window.sessionStorage.removeItem(`${TOKEN_PREFIX}${provider}`)
+  window.sessionStorage.removeItem(`${TOKEN_EXPIRY_PREFIX}${provider}`)
 }
 
 function base64Url(bytes: Uint8Array) {
@@ -251,12 +266,42 @@ export async function finishOAuthFromLocation(): Promise<ProviderId | null> {
       code_verifier: pending.verifier,
     }),
   })
-  const body = (await response.json()) as { access_token?: string; error_description?: string }
+  const body = (await response.json()) as { access_token?: string; expires_in?: number; error_description?: string }
   if (!response.ok || !body.access_token) {
     throw new Error(body.error_description || "Hugging Face konnte nicht verbunden werden.")
   }
-  setToken(provider, body.access_token)
+  setToken(provider, body.access_token, body.expires_in)
   return provider
+}
+
+function normalizedMessages(messages: Message[]) {
+  const compact: Array<{ role: "user" | "assistant"; content: string }> = []
+  for (const message of messages.slice(-16)) {
+    const content = message.content.trim()
+    if (!content || (message.id === "welcome" && message.role === "assistant")) continue
+    const previous = compact.at(-1)
+    if (previous?.role === message.role) previous.content += `\n\n${content}`
+    else compact.push({ role: message.role, content })
+  }
+  while (compact[0]?.role === "assistant") compact.shift()
+  return compact.slice(-12)
+}
+
+async function responseBody(response: Response) {
+  const raw = await response.text()
+  if (!raw) return {} as Record<string, unknown>
+  try {
+    return JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    return { raw }
+  }
+}
+
+function requestError(provider: ProviderId, response: Response, fallback: string, detail?: string) {
+  if (response.status === 401) return new Error(`${PROVIDERS[provider].name}: Die OAuth-Anmeldung ist abgelaufen. Bitte erneut verbinden.`)
+  if (response.status === 403) return new Error(`${PROVIDERS[provider].name}: Zugriff verweigert. Prüfe OAuth-Freigabe, Projekt und aktivierte API.${detail ? ` ${detail}` : ""}`)
+  if (response.status === 429) return new Error(`${PROVIDERS[provider].name}: Das Nutzungslimit ist gerade erreicht. Bitte kurz warten und erneut versuchen.`)
+  return new Error(detail || fallback)
 }
 
 export async function chat(
@@ -267,7 +312,7 @@ export async function chat(
 ) {
   const token = getToken(provider)
   if (!token) throw new Error(`${PROVIDERS[provider].name} ist noch nicht verbunden.`)
-  const compact = messages.slice(-12).map(({ role, content }) => ({ role, content }))
+  const compact = normalizedMessages(messages)
   const system = {
     role: "system",
     content:
@@ -294,16 +339,27 @@ export async function chat(
             role: message.role === "assistant" ? "model" : "user",
             parts: [{ text: message.content }],
           })),
-          generationConfig: { temperature: 0.7, maxOutputTokens: 900 },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
         }),
       },
     )
-    const body = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    const body = (await responseBody(response)) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> }
+        finishReason?: string
+      }>
       error?: { message?: string }
+      promptFeedback?: { blockReason?: string }
+      raw?: string
     }
-    const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("")
-    if (!response.ok || !text) throw new Error(body.error?.message || "Gemini hat keine Antwort geliefert.")
+    const text = body.candidates?.[0]?.content?.parts
+      ?.filter((part) => !part.thought)
+      .map((part) => part.text || "")
+      .join("")
+      .trim()
+    const detail = body.error?.message || body.promptFeedback?.blockReason || body.raw
+    if (!response.ok) throw requestError(provider, response, "Gemini konnte nicht antworten.", detail)
+    if (!text) throw new Error(`Gemini hat keine Antwort geliefert${body.candidates?.[0]?.finishReason ? ` (${body.candidates[0].finishReason})` : ""}.`)
     return text
   }
 
@@ -324,13 +380,18 @@ export async function chat(
     },
     body: JSON.stringify({ model, messages: [system, ...compact], temperature: 0.72, max_tokens: 900 }),
   })
-  const body = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
+  const body = (await responseBody(response)) as {
+    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>
     error?: { message?: string } | string
+    raw?: string
   }
-  const text = body.choices?.[0]?.message?.content
+  const content = body.choices?.[0]?.message?.content
+  const text = typeof content === "string"
+    ? content.trim()
+    : content?.map((part) => part.text || "").join("").trim()
   const error = typeof body.error === "string" ? body.error : body.error?.message
-  if (!response.ok || !text) throw new Error(error || "Das Modell hat keine Antwort geliefert.")
+  if (!response.ok) throw requestError(provider, response, "Das Modell konnte nicht antworten.", error || body.raw)
+  if (!text) throw new Error("Das Modell hat keine Antwort geliefert.")
   return text
 }
 
